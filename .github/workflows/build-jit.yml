@@ -11,6 +11,7 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
+
     steps:
       - name: Checkout (com submódulos)
         uses: actions/checkout@v4
@@ -20,48 +21,43 @@ jobs:
       - name: Adicionar MSBuild ao PATH
         uses: microsoft/setup-msbuild@v2
 
+      # (debug) Mostra estrutura do repo
+      - name: Listar arquivos iniciais
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse -Depth 2 | Select-Object FullName
+
       - name: Configurar solução (gera .sln/.vcxproj)
-        run: .\build\visual-studio\configure.bat
+        shell: cmd
+        run: build\visual-studio\configure.bat
+
+      # (debug) Confirma onde ficou o jit.vcxproj
+      - name: Procurar jit.vcxproj
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse -Filter jit.vcxproj | Select-Object FullName
+
+      # Força toolset moderno (v143) para evitar erro de toolset antigo
+      - name: Patch toolset v143 (se necessário)
+        shell: pwsh
+        run: |
+          $proj = Get-ChildItem -Recurse -Filter jit.vcxproj | Select-Object -First 1
+          if ($proj) {
+            (Get-Content $proj.FullName) `
+              -replace 'v100|v110|v120|v140|v141|v142','v143' `
+              | Set-Content $proj.FullName
+          }
 
       - name: Compilar Win32 Release
-        run: msbuild .\plugin\jit.vcxproj /p:Configuration=Release /p:Platform=Win32 /m
+        shell: cmd
+        run: |
+          for /f "delims=" %%F in ('dir /b /s jit.vcxproj') do set PROJ=%%F
+          msbuild "%PROJ%" /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /m
 
       - name: Publicar artefato (jit.dll)
         uses: actions/upload-artifact@v4
         with:
           name: jit-dll
-          path: plugin\Release\jit.dll
-name: build-jit
-on:
-  workflow_dispatch:
-  push:
-    paths:
-      - '**/*.cpp'
-      - '**/*.h'
-      - 'plugin/**'
-      - 'build/**'
-
-jobs:
-  windows:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout (com submódulos)
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Adicionar MSBuild ao PATH
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Configurar solução (gera .sln/.vcxproj)
-        run: .\build\visual-studio\configure.bat
-
-      - name: Compilar Win32 Release
-        run: msbuild .\plugin\jit.vcxproj /p:Configuration=Release /p:Platform=Win32 /m
-
-      - name: Publicar artefato (jit.dll)
-        uses: actions/upload-artifact@v4
-        with:
-          name: jit-dll
-          path: plugin\Release\jit.dll
-
+          path: |
+            plugin\Release\jit.dll
+            **\Release\jit.dll
