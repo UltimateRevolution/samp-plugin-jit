@@ -10,8 +10,8 @@ on:
       - 'build/**'
 
 jobs:
-  windows:
-    runs-on: windows-latest
+  build:
+    runs-on: windows-2019   # VS2019 (v142) – mais compatível com o JIT antigo
 
     steps:
       - name: Checkout (com submódulos)
@@ -19,36 +19,34 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Adicionar MSBuild ao PATH
+      - name: Setup MSBuild (VS2019)
         uses: microsoft/setup-msbuild@v2
+        with:
+          vs-version: '[16.0,17.0)'   # força MSBuild do VS2019
 
       - name: Configurar solução (gera .sln/.vcxproj)
         shell: cmd
         run: build\visual-studio\configure.bat
 
-      - name: Procurar jit.vcxproj
+      - name: Encontrar solução gerada
         shell: pwsh
         run: |
-          Get-ChildItem -Recurse -Filter jit.vcxproj | Select-Object FullName
+          $sln = Get-ChildItem -Recurse -Filter *.sln | Select-Object -First 1
+          if (!$sln) { throw "Nenhuma .sln gerada" }
+          "SLN=$($sln.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Forçar toolset v143 (se necessário)
-        shell: pwsh
-        run: |
-          $proj = Get-ChildItem -Recurse -Filter jit.vcxproj | Select-Object -First 1
-          if ($proj) {
-            (Get-Content $proj.FullName) -replace 'v100|v110|v120|v140|v141|v142','v143' | Set-Content $proj.FullName
-          } else { throw "jit.vcxproj não encontrado" }
-
-      - name: Compilar Release|Win32
+      - name: Compilar Release|Win32 (toolset v142)
         shell: cmd
-        run: |
-          for /f "delims=" %%F in ('dir /b /s jit.vcxproj') do set PROJ=%%F
-          msbuild "%PROJ%" /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /m
+        run: msbuild "%SLN%" /m /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v142 /v:m
 
-      - name: Publicar artefato (jit.dll)
+      - name: Listar saídas (debug)
+        shell: cmd
+        run: dir /s /b *.dll
+
+      - name: Publicar jit.dll
         uses: actions/upload-artifact@v4
         with:
           name: jit-dll
           path: |
-            plugin\Release\jit.dll
             **\Release\jit.dll
+            **\jit.dll
