@@ -1,0 +1,67 @@
+name: build-jit
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '**/*.cpp'
+      - '**/*.h'
+      - 'plugin/**'
+      - 'build/**'
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout (com submódulos)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Adicionar MSBuild ao PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Configurar solução (gera .sln/.vcxproj)
+        run: .\build\visual-studio\configure.bat
+
+      - name: Compilar Win32 Release
+        run: msbuild .\plugin\jit.vcxproj /p:Configuration=Release /p:Platform=Win32 /m
+
+      - name: Publicar artefato (jit.dll)
+        uses: actions/upload-artifact@v4
+        with:
+          name: jit-dll
+          path: plugin\Release\jit.dll
+name: build-jit
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '**/*.cpp'
+      - '**/*.h'
+      - 'plugin/**'
+      - 'build/**'
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout (com submódulos)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Adicionar MSBuild ao PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Configurar solução (gera .sln/.vcxproj)
+        run: .\build\visual-studio\configure.bat
+
+      - name: Compilar Win32 Release
+        run: msbuild .\plugin\jit.vcxproj /p:Configuration=Release /p:Platform=Win32 /m
+
+      - name: Publicar artefato (jit.dll)
+        uses: actions/upload-artifact@v4
+        with:
+          name: jit-dll
+          path: plugin\Release\jit.dll
+v
