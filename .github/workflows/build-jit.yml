@@ -5,13 +5,15 @@ on:
   push:
     paths:
       - '**/*.cpp'
+      - '**/*.c'
       - '**/*.h'
-      - 'plugin/**'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
       - 'build/**'
 
 jobs:
   build:
-    runs-on: windows-2022   # 2019 aposentado; 2022 funciona
+    runs-on: windows-2022   # estável hoje
 
     steps:
       - name: Checkout (com submódulos)
@@ -19,37 +21,24 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup MSBuild (VS2022)
-        uses: microsoft/setup-msbuild@v2
-        with:
-          vs-version: '[17.0,18.0)'   # força VS 2022
+      # Gera arquivos de build para o VS 2022 (Win32 = 32-bit)
+      - name: Configure (CMake VS2022 Win32)
+        shell: bash
+        run: cmake -S . -B build_vs -G "Visual Studio 17 2022" -A Win32
 
-      - name: Configurar solução (gera .sln / .vcxproj)
-        shell: cmd
-        run: build\visual-studio\configure.bat
+      - name: Build Release
+        shell: bash
+        run: cmake --build build_vs --config Release --parallel
 
-      - name: Encontrar solução gerada
+      - name: Coletar DLL resultante
         shell: pwsh
         run: |
-          $sln = Get-ChildItem -Recurse -Filter *.sln | Select-Object -First 1
-          if (!$sln) { throw "Nenhuma .sln gerada" }
-          "SLN=$($sln.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $dll = Get-ChildItem -Path build_vs -Recurse -Filter jit.dll | Select-Object -First 1
+          if (!$dll) { throw "jit.dll não encontrado em build_vs/*/Release" }
+          "ARTIFACT=$($dll.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      # Tenta v142 (se a imagem tiver instalado); se falhar, tenta v143
-      - name: Compilar Release|Win32 (tenta v142 -> v143)
-        shell: cmd
-        run: |
-          msbuild "%SLN%" /m /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v142 /v:m ^
-          || msbuild "%SLN%" /m /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /v:m
-
-      - name: Listar DLLs (debug)
-        shell: pwsh
-        run: Get-ChildItem -Recurse -Filter jit.dll | % { $_.FullName }
-
-      - name: Publicar jit.dll
+      - name: Publicar artefato
         uses: actions/upload-artifact@v4
         with:
           name: jit-dll
-          path: |
-            **\Release\jit.dll
-            **\jit.dll
+          path: ${{ env.ARTIFACT }}
