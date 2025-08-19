@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-2019   # VS2019 (v142) – mais compatível com o JIT antigo
+    runs-on: windows-2022   # 2019 aposentado; 2022 funciona
 
     steps:
       - name: Checkout (com submódulos)
@@ -19,12 +19,12 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup MSBuild (VS2019)
+      - name: Setup MSBuild (VS2022)
         uses: microsoft/setup-msbuild@v2
         with:
-          vs-version: '[16.0,17.0)'   # força MSBuild do VS2019
+          vs-version: '[17.0,18.0)'   # força VS 2022
 
-      - name: Configurar solução (gera .sln/.vcxproj)
+      - name: Configurar solução (gera .sln / .vcxproj)
         shell: cmd
         run: build\visual-studio\configure.bat
 
@@ -35,13 +35,16 @@ jobs:
           if (!$sln) { throw "Nenhuma .sln gerada" }
           "SLN=$($sln.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Compilar Release|Win32 (toolset v142)
+      # Tenta v142 (se a imagem tiver instalado); se falhar, tenta v143
+      - name: Compilar Release|Win32 (tenta v142 -> v143)
         shell: cmd
-        run: msbuild "%SLN%" /m /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v142 /v:m
+        run: |
+          msbuild "%SLN%" /m /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v142 /v:m ^
+          || msbuild "%SLN%" /m /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /v:m
 
-      - name: Listar saídas (debug)
-        shell: cmd
-        run: dir /s /b *.dll
+      - name: Listar DLLs (debug)
+        shell: pwsh
+        run: Get-ChildItem -Recurse -Filter jit.dll | % { $_.FullName }
 
       - name: Publicar jit.dll
         uses: actions/upload-artifact@v4
