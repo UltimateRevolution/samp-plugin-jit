@@ -64,4 +64,4 @@ jobs:
         with:
           name: jit-dll
           path: plugin\Release\jit.dll
-v
+
